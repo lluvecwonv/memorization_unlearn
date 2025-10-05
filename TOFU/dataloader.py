@@ -19,12 +19,28 @@ from scipy.stats import ks_2samp, hmean
 import csv 
 import pickle
 import math
-
-import math
-import os
 import tqdm
 
 
+def _unpack_inputs(inputs):
+    """Unpack inputs from dict or tuple. Returns (input_ids, labels, attention_mask, forget_mask)."""
+    if isinstance(inputs, dict):
+        input_ids = inputs["input_ids"]
+        labels = inputs["labels"]
+        attention_mask = inputs.get("attention_mask", None)
+        forget_mask = inputs.get("forget_mask", inputs.get("mask", None))
+        return input_ids, labels, attention_mask, forget_mask
+    else:
+        # Handle tuple inputs
+        if len(inputs) >= 4:
+            input_ids, labels, attention_mask, forget_mask = inputs[:4]
+        elif len(inputs) == 3:
+            input_ids, labels, attention_mask = inputs[:3]
+            forget_mask = None
+        else:
+            raise ValueError(f"Expected at least 3 elements in inputs, got {len(inputs)}")
+        return input_ids, labels, attention_mask, forget_mask
+ 
 class CustomTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         input_ids, labels, attention_mask = inputs
@@ -177,6 +193,88 @@ class CustomTrainerForgetting(Trainer):
             kl_loss = nn.functional.kl_div(current_probs, oracle_probs, reduction='batchmean', log_target=True)
             loss = forget_loss + kl_loss
 
+        elif self.loss_type == "tsimnpo":
+            forget_inputs, _ = inputs
+            input_ids, labels, attention_mask, forget_mask = _unpack_inputs(forget_inputs)
+            outputs = model(input_ids, labels=labels, attention_mask=attention_mask)
+            logits = outputs.logits
+            
+            # Calculate token-level cross-entropy losses
+            shifted_labels = labels[..., 1:].contiguous()
+            shifted_logits = logits[..., :-1, :].contiguous()
+            
+            loss_function = nn.CrossEntropyLoss(ignore_index=-100, reduction='none')
+            token_losses = loss_function(shifted_logits.transpose(-1,-2), shifted_labels)  # [batch_size, seq_len-1]
+            
+            valid = (shifted_labels != -100)
+            
+            # Use forget_mask if available, otherwise use all valid tokens
+            if forget_mask is not None:
+                fmask = forget_mask[..., 1:].contiguous().bool()
+                forget_hits = (fmask & valid)
+            else:
+                forget_hits = valid
+            
+            if forget_hits.any():
+                token_loss = (token_losses - self.gamma)[forget_hits]
+                forget_loss = -F.logsigmoid(self.beta * token_loss).mean() * (2.0 / self.beta)
+            else:
+                forget_loss = torch.tensor(0.0, device=logits.device)
+            
+            loss = forget_loss
+            print(f"forget_loss: {forget_loss}")
+
+        elif self.loss_type == "tnpo":
+            forget_inputs, _ = inputs
+            input_ids, labels, attention_mask, forget_mask = _unpack_inputs(forget_inputs)
+    
+            outputs = model(input_ids, labels=labels, attention_mask=attention_mask)
+            logits = outputs.logits
+            
+            # Get oracle model outputs
+            with torch.no_grad():
+                self.oracle_model.eval()
+                oracle_outputs = self.oracle_model(input_ids, labels=labels, attention_mask=attention_mask)
+                oracle_logits = oracle_outputs.logits
+            
+            # Token-level TNPO computation (원래 코드 스타일)
+            sl = logits[..., :-1, :].contiguous()
+            srl = oracle_logits[..., :-1, :].contiguous()
+            y = labels[..., 1:].contiguous()
+            
+            valid = (y != -100)
+            
+            # Compute log probabilities
+            logp = F.log_softmax(sl.float(), dim=-1)
+            logp_oracle = F.log_softmax(srl.float(), dim=-1)
+            
+            # Get target probabilities
+            y_safe = y.masked_fill(~valid, 0)
+            tgt = y_safe.unsqueeze(-1)
+            gp = torch.gather(logp, 2, tgt).squeeze(-1)  # log π_θ(y|x)
+            gop = torch.gather(logp_oracle, 2, tgt).squeeze(-1)  # log π_oracle(y|x)
+            
+            ce_theta = -gp
+            ce_oracle = -gop.detach()  # Explicitly detach oracle values
+            
+            # Apply forget mask for token-level selection
+            if forget_mask is not None:
+                fmask = forget_mask[..., 1:].contiguous().bool()
+                forget_hits = (fmask & valid)
+            else:
+                forget_hits = valid
+            
+            # TNPO loss with safety check
+            neg_log_ratios = (ce_theta - ce_oracle)[forget_hits]
+            if forget_hits.any():
+                forget_loss = -F.logsigmoid(self.beta * neg_log_ratios).mean() * (2.0 / self.beta)
+            else:
+                # Graph-safe zero
+                forget_loss = torch.zeros(1, device=logits.device, requires_grad=True).squeeze()
+            
+            loss = forget_loss
+            print(f"tnpo_loss: {forget_loss}")
+
         elif self.loss_type == "grad_diff":
             forget_inputs, retain_inputs = inputs
             input_ids, labels, attention_mask = forget_inputs
@@ -274,6 +372,7 @@ class CustomTrainerForgetting(Trainer):
             forget_loss = get_batch_loss(outputs.logits, labels) / loss_mask.sum(-1) - self.gamma
 
             loss = -F.logsigmoid(self.beta * forget_loss).mean() * 2 / self.beta
+            print(f"forget_loss: {loss}")
 
         elif self.loss_type == 'simnpo_grad_diff':
             forget_inputs, retain_inputs = inputs
@@ -302,7 +401,7 @@ class CustomTrainerForgetting(Trainer):
                     forget_loss_oracle = get_batch_loss(forget_logits_oracle, labels)
                 neg_log_ratios = forget_loss_current - forget_loss_oracle
             else:
-                raise NotImplementedError
+                raise NotImplementedError3
             loss = -F.logsigmoid(self.beta * neg_log_ratios).mean() * 2 / self.beta
 
         elif self.loss_type == 'npo_grad_diff':
@@ -763,7 +862,13 @@ def custom_data_collator_forget(samples):
         input_ids = [s[0] for s in data]
         labels = [s[1] for s in data]
         attention_mask = [s[2] for s in data]
-        rets.append((torch.stack(input_ids), torch.stack(labels), torch.stack(attention_mask)))
+        
+        # Handle forget_mask if present (4th element)
+        if len(data[0]) > 3:
+            forget_mask = [s[3] for s in data]
+            rets.append((torch.stack(input_ids), torch.stack(labels), torch.stack(attention_mask), torch.stack(forget_mask)))
+        else:
+            rets.append((torch.stack(input_ids), torch.stack(labels), torch.stack(attention_mask)))
     return rets
 
 

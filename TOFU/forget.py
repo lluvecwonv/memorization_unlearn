@@ -1,4 +1,4 @@
-from data_module import TextForgetDatasetQA, TextForgetDatasetDPOQA, TextForgetDatasetKTOQA
+from data_module import TextForgetDatasetQA, TextForgetDatasetDPOQA, TextForgetDatasetKTOQA, TNPOForgetDatasetQA
 from dataloader import CustomTrainerForgetting, custom_data_collator_forget
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -62,7 +62,7 @@ def main(cfg):
     print("Saving to: ", cfg.save_dir)
     print("######################")
 
-    max_length = 500
+    max_length = 256
 
     # determine the data path.
     if cfg.split in ['forget01','forget05','forget10']:
@@ -86,6 +86,14 @@ def main(cfg):
                                                     max_length=max_length, 
                                                     split=cfg.split)
 
+    elif cfg.forget_loss in ["tsimnpo","tnpo"]:
+        torch_format_dataset = TNPOForgetDatasetQA(data_path, 
+                                                   tokenizer=tokenizer, 
+                                                   model_family = cfg.model_family, 
+                                                   max_length=max_length, 
+                                                   split=cfg.split,
+                                                   loss_type=cfg.forget_loss)
+
     else:
         torch_format_dataset = TextForgetDatasetQA(data_path, 
                                                     tokenizer=tokenizer, 
@@ -94,6 +102,32 @@ def main(cfg):
                                                     split=cfg.split, 
                                                     loss_type=cfg.forget_loss)
     
+    # forget 토큰 마스킹 적용
+    mask_path = getattr(cfg, 'forget_mask_path', None)
+    if mask_path is not None and mask_path.strip() != "":
+        print(f"Loading forget mask from {mask_path}")
+        forget_mask = torch.load(mask_path, weights_only=True)
+        
+        # 마스크 내용 확인
+        print(f"Loaded forget mask with {len(forget_mask)} entries")
+        if len(forget_mask) > 0:
+            sample_mask = forget_mask[0]
+            print(f"First mask shape: {sample_mask.shape}, dtype: {sample_mask.dtype}")
+            print(f"First mask True count: {sample_mask.sum().item()} / {len(sample_mask)}")
+            print(f"First few values: {sample_mask[:20]}")
+            
+            # 전체 마스크 통계
+            total_true = sum(mask.sum().item() for mask in forget_mask)
+            total_tokens = sum(len(mask) for mask in forget_mask)
+            print(f"Total True tokens: {total_true} / {total_tokens} ({total_true/total_tokens:.4f})")
+        
+        # 데이터셋에 마스크 설정
+        if hasattr(torch_format_dataset, 'set_forget_mask'):
+            torch_format_dataset.set_forget_mask(forget_mask)
+            print(f"Applied forget masking to {len(forget_mask)} examples")
+        else:
+            print("Warning: Dataset does not support forget masking")
+
     batch_size = cfg.batch_size
     gradient_accumulation_steps = cfg.gradient_accumulation_steps
     steps_per_epoch = len(torch_format_dataset)//(batch_size*gradient_accumulation_steps*num_devices)
@@ -129,7 +163,7 @@ def main(cfg):
             logging_dir=f'{cfg.save_dir}/logs',
             output_dir=cfg.save_dir,
             optim="paged_adamw_32bit",
-            save_steps=max_steps+1, # do not save the model
+            save_steps=steps_per_epoch, # save model every epoch
             ddp_find_unused_parameters= False,
             deepspeed='config/ds_config.json',
             weight_decay = cfg.weight_decay,
@@ -186,16 +220,8 @@ def main(cfg):
         model = get_peft_model(model, config)
         print_trainable_parameters(model)
 
-    # edit the evaluation split when we aim to forget beyond 10 percent of the data.
-    if cfg.split in ['forget01','forget05','forget10']:
-        pass
-    elif cfg.split in ['forget20','forget35','forget50','forget90']:
-        cfg.eval.data_path = ['locuslab/TOFU', 'locuslab/TOFU', 'locuslab/TOFU', './TOFU_data']
-        cfg.eval.split = 'forget10_perturbed' # we use the commonly available forget10 to evaluate the truth ratio on the forget set when we do forget20 - forget90.
-        cfg.eval.split_list = ['retain_perturbed', 'real_authors_perturbed', 'world_facts_perturbed', 'forget10_perturbed']
-    else:
-        raise NotImplementedError
-
+    print("######################")
+    print(f"forget_loss: {cfg.forget_loss}")
     trainer = CustomTrainerForgetting(
         model=model,
         tokenizer=tokenizer,
@@ -218,7 +244,7 @@ def main(cfg):
     )
     model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
     trainer.train()
-    trainer.evaluate()
+    trainer.evaluate()  # 평가 모드 비활성화
 
     #save the tokenizer
     model.save_pretrained(cfg.save_dir)

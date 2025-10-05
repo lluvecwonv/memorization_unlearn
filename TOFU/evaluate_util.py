@@ -175,9 +175,13 @@ def main(cfg):
     assert len(cfg.data_path)==len(cfg.split_list)==len(cfg.eval_task)==len(cfg.question_key)==len(cfg.answer_key)==len(cfg.base_answer_key)==len(cfg.perturbed_answer_key), "data_path, split, eval_task, question_key, and answer_key must be the same length"
     Path(cfg.save_dir).mkdir(parents=True, exist_ok=True)
 
+    # device_map 설정 (단일 GPU 사용)
     if os.environ.get('LOCAL_RANK') is not None:
         local_rank = int(os.environ.get('LOCAL_RANK', '0'))
         device_map = {'': local_rank}
+    else:
+        # 단일 GPU 사용 시 기본 설정
+        device_map = 'auto'
 
     os.environ["WANDB_DISABLED"] = "true"
     model_cfg = get_model_identifiers_from_yaml(cfg.model_family)
@@ -219,6 +223,7 @@ def main(cfg):
         reinitialize_weights(model)
 
     #write custom eval loop using compute_metrics
+    aggregated_eval_logs = {}
 
     for i, (folder, split, question_key, answer_key, eval_task, base_answer_key, perturbed_answer_key) in enumerate(zip(cfg.data_path, cfg.split_list, cfg.question_key, cfg.answer_key, cfg.eval_task, cfg.base_answer_key, cfg.perturbed_answer_key)):
         world_size = int(os.environ.get('WORLD_SIZE', '1'))
@@ -237,6 +242,14 @@ def main(cfg):
         with open(save_filename, "w") as f:
             # pretty write json to f
             json.dump(eval_logs, f, indent=4)
+
+        aggregated_eval_logs[f'{eval_task}.json'] = eval_logs
+
+    aggregated_eval_log_filename = os.path.join(cfg.save_dir, "eval_log_aggregated.json")
+
+    with open(aggregated_eval_log_filename, "w") as f:
+        # pretty write json to f
+        json.dump(aggregated_eval_logs, f, indent=4)
 
 def eval_accuracy(logits, labels):
     preds =logits.argmax(-1)
@@ -319,4 +332,3 @@ def eval_rouge_recall(gen_outputs, ground_truths):
 
 if __name__ == "__main__":
     main()
-

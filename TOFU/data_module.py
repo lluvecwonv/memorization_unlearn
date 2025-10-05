@@ -225,6 +225,79 @@ class TextDatasetQA(Dataset):
                 torch.stack(pad_attention_mask_list).squeeze()
 
 
+class TNPOForgetDatasetQA(Dataset):
+    def __init__(self, data_path, tokenizer, model_family,  max_length=512, split = "forget10", loss_type="idk"):
+        super(TNPOForgetDatasetQA, self).__init__()
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        
+        if './TOFU_data' not in data_path:
+            self.forget_data = datasets.load_dataset(data_path, split)["train"]
+        else:
+            self.forget_data = datasets.load_dataset('json', data_files=os.path.join(data_path, split+'.json'))['train']
+            
+        retain_split = "retain" + str(100 - int(split.replace("forget", ""))).zfill(2)
+        if './TOFU_data' not in data_path:
+            self.retain_data = datasets.load_dataset(data_path, retain_split)["train"]
+        else:
+            self.retain_data = datasets.load_dataset('json', data_files=os.path.join(data_path, retain_split+'.json'))['train']
+            
+        self.model_configs = get_model_identifiers_from_yaml(model_family)
+        self.loss_type = loss_type
+        self.forget_mask = None
+        
+        if self.loss_type == "idk":
+            self.split1, self.split2 = "idk", "retain"
+            self.idontknowfile = "data/idontknow.jsonl"
+            with open(self.idontknowfile, "r") as f:
+                self.idk = f.readlines()
+        else:
+            self.split1, self.split2 = "forget", "retain"
+
+    def set_forget_mask(self, forget_mask):
+        """forget 마스크 설정"""
+        self.forget_mask = forget_mask
+        print(f"Forget mask set with {len(forget_mask)} entries")
+        if len(forget_mask) > 0:
+            print(f"First mask shape: {forget_mask[0].shape}, dtype: {forget_mask[0].dtype}")
+            print(f"First mask sum: {forget_mask[0].sum()}")
+
+    def __len__(self):
+        return len(self.forget_data)
+
+    def __getitem__(self, idx):
+        rets = []
+        for data_type in [self.split1, self.split2]:
+            data = self.retain_data if data_type == "retain" else self.forget_data
+            data_idx = idx if data_type != "retain" else (idx + torch.randint(0, len(self.retain_data), (1,)).item()) % len(self.retain_data)
+            question = data[data_idx]['question']
+            answer = data[data_idx]['answer']
+
+            if data_type == "idk":
+                rand_pos = torch.randint(0, len(self.idk), (1,)).item()
+                answer = self.idk[rand_pos].strip()
+                
+            converted_data = convert_raw_data_to_model_format(self.tokenizer, self.max_length, question, answer, self.model_configs)
+            
+            if data_type == "forget" and self.forget_mask is not None and idx < len(self.forget_mask):
+                mask = self.forget_mask[idx]
+                
+                if len(mask) < len(converted_data[0]):
+                    adjusted_mask = torch.cat([
+                        mask, 
+                        torch.zeros(len(converted_data[0]) - len(mask), dtype=torch.bool)
+                    ])
+                else:
+                    adjusted_mask = mask[:len(converted_data[0])]
+                
+                converted_data = converted_data + (adjusted_mask,)
+            else:
+                empty_mask = torch.zeros(len(converted_data[0]), dtype=torch.bool)
+                converted_data = converted_data + (empty_mask,)
+            
+            rets.append(converted_data)
+        return rets
+
 import random
 class UnlearnDataset(Dataset):
     def __init__(self, datasets):
@@ -275,6 +348,15 @@ def custom_data_collator(samples):
     labels = [s[1] for s in samples]
     attention_mask = [s[2] for s in samples]
     return torch.stack(input_ids), torch.stack(labels), torch.stack(attention_mask)
+
+
+def custom_data_collator_with_indices(samples):
+    """인덱스를 포함한 데이터 collator"""
+    input_ids = [s[0] for s in samples]
+    labels = [s[1] for s in samples]
+    attention_mask = [s[2] for s in samples]
+    indices = torch.arange(len(samples))  # 인덱스 생성
+    return torch.stack(input_ids), torch.stack(labels), torch.stack(attention_mask), indices
 
 
 def get_batch_loss(output, labels):
