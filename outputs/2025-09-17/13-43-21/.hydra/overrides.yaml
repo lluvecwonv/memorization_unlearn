@@ -1,0 +1,3 @@
+- model_family=phi
+- split=forget10_perturbed
+- model_path=/root/npo/results/TOFU_phi_simnpo_forget10/checkpoint-60

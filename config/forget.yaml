@@ -1,0 +1,34 @@
+# Forget/Unlearning Configuration
+
+# Model settings
+model_family: "phi"  # or llama, gpt, etc.
+model_path: "/root/tofu/files/models/ToFU_full_phi/checkpoint-625"
+
+
+# Data settings
+data_path: "locuslab/TOFU"
+split: "forget10"  # forget10, forget05, etc.
+
+# Training settings
+batch_size: 4
+gradient_accumulation_steps: 1
+num_epochs: 3
+lr: 1e-4
+weight_decay: 0.01
+seed: 42
+
+# Loss settings
+forget_loss: "grad_ascent"  # options: "grad_ascent", "grad_diff", "KL", "dpo"
+
+# LoRA settings
+LoRA:
+  r: 0
+  alpha: 0  
+  dropout: 0.1
+
+# Save settings
+save_dir: "./results/forget_training"
+save_model: true
+overwrite_dir: true
+eval_only: false
+eval_while_train: false

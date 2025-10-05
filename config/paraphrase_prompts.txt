@@ -1,0 +1,24 @@
+Rephrase the following question while keeping the same meaning:
+
+Original: {query}
+Paraphrased:
+Please rewrite this question in a different way but with the same meaning:
+
+Question: {query}
+Rewritten:
+Transform the following question into different words while preserving its original intent:
+
+Input: {query}
+Output:
+Can you paraphrase this question to express the same idea differently:
+
+Original question: {query}
+Paraphrased version:
+Reformulate the following question using alternative phrasing:
+
+Given question: {query}
+Reformulated:
+Express this question in a new way while maintaining its core meaning:
+
+Source: {query}
+Alternative:

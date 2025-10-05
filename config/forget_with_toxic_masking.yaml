@@ -1,0 +1,45 @@
+# 개선된 망각 훈련 설정 (유해 토큰 마스킹 포함)
+
+# Model settings
+model_family: "pythia-1.4"  # or llama, gpt, etc.
+model_path: "/root/tofu/files/models/ToFU_finetuned_pythia-410m_full/checkpoint-625"
+
+# Data settings
+data_path: "locuslab/TOFU"
+split: "forget10"  # forget10, forget05, etc.
+
+# Training settings
+batch_size: 4
+gradient_accumulation_steps: 1
+num_epochs: 3
+lr: 5e-5
+weight_decay: 0.01
+seed: 42
+
+# Loss settings
+forget_loss: "TNPO"  # TNPO with toxic token masking support
+
+# LoRA settings
+LoRA:
+  r: 8
+  alpha: 16  
+  dropout: 0.1
+
+# Save settings
+save_dir: "./results/forget_training_with_toxic_masking"
+save_model: true
+overwrite_dir: true
+eval_only: false
+eval_while_train: false
+
+# IF-Guide 유해 토큰 마스킹 설정
+toxic_token_mask_path: null  # 유해 토큰 마스크 파일 경로 (예: "/path/to/toxic_token_mask.pt")
+toxic_lambda: 1.0  # 유해 토큰 억제 강도 (1.0이 기본값)
+eval_toxic_masking: false  # 평가 시에도 유해 토큰 마스킹 적용 여부
+
+# 추가 훈련 개선사항 (필요한 것만)
+lr_scheduler_type: "cosine"  # 학습률 스케줄러 타입
+adam_beta1: 0.9
+adam_beta2: 0.95
+adam_epsilon: 1e-08
+max_grad_norm: 1.0
