@@ -75,8 +75,8 @@ class LanguageModelingTask(Task):
                     f"gpt_neox.layers.{i}.attention.dense",
                 ])
 
-        elif family in ["llama-2", "llama-3"]:
-            # llama-2와 llama-3의 모듈 구조가 동일
+        elif family in ["llama2-7b", "llama-3"]:
+            # llama-2, llama2-7b, llama-3의 모듈 구조가 동일
             for i in range(num_layers):
                 total_modules.extend([
                     f"model.layers.{i}.mlp.gate_proj",
