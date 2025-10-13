@@ -3,7 +3,7 @@ set -e
 
 # ========== Model and Data Configuration ==========
 MODEL_NAME="path/to/your/finetuned/model"  # TODO: 실제 모델 경로로 변경
-MODEL_FAMILY="llama-3"  # "llama-3" or "pythia"
+MODEL_FAMILY="llama2-7b"  # "llama2-7b" or "pythia"
 DATA_PATH="locuslab/TOFU"
 SPLIT="full"  # "full", "forget10", "retain90", etc.
 QUESTION_KEY="question"
