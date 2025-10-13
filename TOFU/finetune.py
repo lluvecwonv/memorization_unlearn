@@ -97,7 +97,7 @@ def main(cfg):
             save_steps=steps_per_epoch,
             save_only_model=True,
             ddp_find_unused_parameters= False,
-            evaluation_strategy="no",
+            eval_strategy="no",
             deepspeed='config/ds_config.json',
             weight_decay = cfg.weight_decay
         )
@@ -145,3 +145,6 @@ def main(cfg):
 
 if __name__ == "__main__":
     main()
+
+#master_port=29500
+#CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node=1 --master_port=$master_port finetune.py --config-name=finetune.yaml split=full 
