@@ -14,8 +14,13 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(script_dir)
 sys.path.insert(0, parent_dir)
 
-# Kronfluence imports from local path
-sys.path.insert(0, "/Users/yunchaewon/Library/Mobile Documents/com~apple~CloudDocs/llm_lab/code/tnpo/tnpo/kronfluence")
+# Add grandparent directory for kronfluence (상대경로로 변경)
+grandparent_dir = os.path.dirname(parent_dir)
+tnpo_dir = os.path.dirname(grandparent_dir)  # tnpo directory
+kronfluence_path = os.path.join(tnpo_dir, "kronfluence")
+sys.path.insert(0, kronfluence_path)
+
+# Import kronfluence
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
 from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
@@ -25,12 +30,41 @@ from typing import Optional
 from tqdm import tqdm
 from torch import nn
 
-# Import your existing TOFU utilities
+# Import your existing TOFU utilities (TOFU/utils.py에서)
 from data_module import TextDatasetQA, custom_data_collator
 from utils import get_model_identifiers_from_yaml
 
 # Import local task definition
-from utils.task import LanguageModelingTask
+# Handle both directory names (utils.py or utils) for compatibility
+current_dir = os.path.dirname(os.path.abspath(__file__))
+utils_py_dir = os.path.join(current_dir, "utils.py")
+utils_dir = os.path.join(current_dir, "utils")
+
+# Check which directory exists and import accordingly
+if os.path.exists(utils_py_dir) and os.path.isdir(utils_py_dir):
+    # utils.py directory exists (서버 환경)
+    task_module_path = os.path.join(utils_py_dir, "task.py")
+    if os.path.exists(task_module_path):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("task", task_module_path)
+        task_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(task_module)
+        LanguageModelingTask = task_module.LanguageModelingTask
+    else:
+        raise ImportError(f"Cannot find task.py in {utils_py_dir}")
+elif os.path.exists(utils_dir) and os.path.isdir(utils_dir):
+    # utils directory exists (로컬 환경)
+    task_module_path = os.path.join(utils_dir, "task.py")
+    if os.path.exists(task_module_path):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("task", task_module_path)
+        task_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(task_module)
+        LanguageModelingTask = task_module.LanguageModelingTask
+    else:
+        raise ImportError(f"Cannot find task.py in {utils_dir}")
+else:
+    raise ImportError("Cannot find utils or utils.py directory")
 
 # Configure CUDA memory
 os.environ.setdefault(
