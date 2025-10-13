@@ -102,9 +102,8 @@ def main(cfg):
             weight_decay = cfg.weight_decay
         )
 
-    model = AutoModelForCausalLM.from_pretrained(model_id, 
-                                                 use_flash_attention_2=model_cfg["flash_attention2"]=="true", 
-                                                 torch_dtype=torch.bfloat16, 
+    model = AutoModelForCausalLM.from_pretrained(model_id,
+                                                 torch_dtype=torch.bfloat16,
                                                  trust_remote_code = True)
     model.generation_config.do_sample = True
     
