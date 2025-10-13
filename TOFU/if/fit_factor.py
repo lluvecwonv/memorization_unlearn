@@ -30,10 +30,10 @@ from data_module import TextDatasetQA, custom_data_collator
 from utils import get_model_identifiers_from_yaml
 
 # Import local task definition
-from utils.py.task import LanguageModelingTask
+from utils.task import LanguageModelingTask
 
 # Configure CUDA memory
-os.environ.setdefault(
+os.environ.setdefault∫(
     "PYTORCH_CUDA_ALLOC_CONF",
     "max_split_size_mb:128,garbage_collection_threshold:0.8,expandable_segments:True",
 )
