@@ -1,4 +1,0 @@
-2025-09-20 13:12:59,297 - INFO - 체크포인트 개수 세기 시작: /root/Unlearn-Simple/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-05_llama2-7b_full_seed42_1/checkpoint-625/unlearned/8GPU_simnpo_1e-05_forget10_epoch10_batch4_accum4_beta2.0_gamma0.0_grad_diff_coeff1.0_reffine_tuned_evalsteps_per_epoch_seed1001_1
-2025-09-20 13:12:59,297 - INFO - 총 체크포인트 개수: 10
-2025-09-20 13:12:59,298 - INFO - 결과 저장: results/checkpoint_count_8GPU_simnpo_1e-05_forget10_epoch10_batch4_accum4_beta2.0_gamma0.0_grad_diff_coeff1.0_reffine_tuned_evalsteps_per_epoch_seed1001_1.json
-2025-09-20 13:12:59,298 - INFO - 체크포인트 개수 세기 완료

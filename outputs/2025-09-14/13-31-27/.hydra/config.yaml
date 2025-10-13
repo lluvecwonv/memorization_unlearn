@@ -1,5 +1,0 @@
-retain_result: /root/tofu/files/models/ToFU_finetuned_phi_retain90/checkpoint-562/eval_results/ds_size300/eval_log.json
-ckpt_result: /root/npo/results/TOFU_phi_TNPO_forget10/checkpoint-60/eval_results/ds_size300/eval_log.json
-method_name: phi_TNPO
-submitted_by: john
-save_file: ./results/TOFU_phi_TNPO_forget10_aggregated_eval.json

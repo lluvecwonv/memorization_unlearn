@@ -54,7 +54,7 @@ def eval_perturbation_ratio(eval_dataloader, perturb_dataloader, model):
         # eval_logs['perturb_loss'] = eval_logs.get('perturb_loss', []) + [mean_perturb_loss.mean().item()]
 
         eval_logs['average_perturb_loss'] = eval_logs.get('average_perturb_loss', []) + (perturb_loss/num_token_perturb).tolist()
-        eval_logs['avg_paraphrased_loss'] = eval_logs.get('avg_paraphrased_loss', []) + (gt_loss/num_token_gt).cpu().numpy().tolist()
+        eval_logs['avg_paraphrased_loss'] = eval_logs.get('avg_paraphrased_loss', []) + (gt_loss/num_token_gt).float().cpu().numpy().tolist()
 
         eval_logs['paraphrased_loss'] = eval_logs.get('paraphrased_loss', []) + gt_loss.tolist()
         eval_logs['perturb_loss'] = eval_logs.get('perturb_loss', []) + perturb_loss.tolist()
@@ -136,7 +136,7 @@ def get_all_evals(cfg, model, tokenizer, eval_task, eval_dataloader, base_eval_d
         gt_loss = get_batch_loss(outputs.logits, batch['labels'])
         num_token_gt = (batch['labels']!=-100).sum(-1)
 
-        eval_logs['avg_gt_loss'] = eval_logs.get('avg_gt_loss', []) + (gt_loss/num_token_gt).cpu().numpy().tolist()
+        eval_logs['avg_gt_loss'] = eval_logs.get('avg_gt_loss', []) + (gt_loss/num_token_gt).float().cpu().numpy().tolist()
         eval_logs['gt_loss'] = eval_logs.get('gt_loss', []) + gt_loss.tolist()
         eval_logs['num_token_gt'] = eval_logs.get('num_token_gt', []) + num_token_gt.tolist()
 
@@ -167,7 +167,7 @@ def get_kl_divergence(model, oracle_model, eval_dataloader):
             probs = F.log_softmax(outputs.logits, dim=-1)
             probs_oracle_model = F.log_softmax(outputs_oracle_model.logits, dim=-1)
             kl_divergence = nn.functional.kl_div(probs, probs_oracle_model, reduction='none', log_target=True)
-            kl_outputs.extend(kl_divergence.sum(axis=2).mean(axis=1).cpu().numpy().tolist())
+            kl_outputs.extend(kl_divergence.sum(axis=2).mean(axis=1).float().cpu().numpy().tolist())
     return kl_outputs
 
 @hydra.main(version_base=None, config_path="config", config_name="eval_everything")
@@ -193,17 +193,20 @@ def main(cfg):
     batch_size = cfg.batch_size
 
     model = None
-    config = AutoConfig.from_pretrained(model_id, use_flash_attention_2=model_cfg["flash_attention2"]=="true", trust_remote_code = True, device_map=device_map)
+    config = AutoConfig.from_pretrained(model_id, trust_remote_code = True, device_map=device_map)
     for attempt in range(3):
         try:
         # do thing
             if cfg.use_pretrained:
                 print(f"Loading pretrained from {model_id}")
-                model = AutoModelForCausalLM.from_pretrained(model_id, config=config, use_flash_attention_2=model_cfg["flash_attention2"]=="true", torch_dtype=torch.bfloat16, trust_remote_code = True, device_map=device_map)
+                model = AutoModelForCausalLM.from_pretrained(model_id, config=config, torch_dtype=torch.bfloat16, trust_remote_code = True, device_map=device_map)
             else:
                 print(f"Loading checkpoint from {cfg.model_path}")
-                model = AutoModelForCausalLM.from_pretrained(cfg.model_path, config=config, use_flash_attention_2=model_cfg["flash_attention2"]=="true", torch_dtype=torch.bfloat16, trust_remote_code = True, device_map=device_map)
+                model = AutoModelForCausalLM.from_pretrained(cfg.model_path, config=config, torch_dtype=torch.bfloat16, trust_remote_code = True, device_map=device_map)
         except Exception as e:
+            print(f"Error loading model (attempt {attempt+1}): {e}")
+            import traceback
+            traceback.print_exc()
             continue
         # perhaps reconnect, etc.
         else:

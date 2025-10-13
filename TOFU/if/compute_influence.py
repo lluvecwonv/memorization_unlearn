@@ -1,17 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Script to compute token-wise, differential influence scores for an LLM
-on the provided training and query datasets using TOFU dataset.
-
-This is a corrected 'accuracy-first' implementation:
-- computes S_ij = (g_bar_forget - g_bar_retain)^T * H^{-1} * grad_theta L(x_ij; theta)
-- computes per-token, per-sample grads exactly (slow but correct).
-- uses Subset-based splitting to avoid loading all training data into memory.
-- safe handling of None grads (fills zeros to preserve parameter order).
-- validates factor/parameter vector lengths for H^{-1} application.
-
-Run with small model & small datasets for verification before scaling.
-"""
 import argparse
 import logging
 import os
