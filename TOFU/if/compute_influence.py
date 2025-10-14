@@ -29,7 +29,6 @@ sys.path.insert(0, str(TOFU_DIR))      # First: for data_module.py and TOFU's ut
 sys.path.insert(1, str(IF_UTILS_DIR))  # Second: for if/utils/task.py
 
 from data_module import TextDatasetQA
-from utils import get_model_identifiers_from_yaml
 from task import LanguageModelingTask  # from if/utils/task.py
 
 
@@ -184,12 +183,32 @@ def kronfluence_data_collator(batch):
     }
 
 
+def load_model_config(model_family: str):
+    """Load model configuration from yaml file with absolute path."""
+    config_path = TOFU_DIR / "config" / "model_config.yaml"
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"Model config not found at {config_path}")
+
+    with open(config_path, 'r') as f:
+        import yaml
+        model_configs = yaml.safe_load(f)
+
+    if model_family not in model_configs:
+        raise ValueError(
+            f"Model family '{model_family}' not found in config. "
+            f"Available: {list(model_configs.keys())}"
+        )
+
+    return model_configs[model_family]
+
+
 def load_model_and_tokenizer(model_name: str, model_family: str):
     """Load model and tokenizer from checkpoint."""
     logging.info(f"Loading model from {model_name}")
 
-    # Load tokenizer from model family config
-    model_configs = get_model_identifiers_from_yaml(model_family)
+    # Load tokenizer from model family config (using absolute path)
+    model_configs = load_model_config(model_family)
     tokenizer = AutoTokenizer.from_pretrained(model_configs['hf_key'])
 
     # Load model
