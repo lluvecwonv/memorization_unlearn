@@ -466,8 +466,8 @@ def compute_pairwise_dual_query_aggregated_scores_with_loaders(
                 del measurement
                 pbar.update(1)
 
-    # Aggregate positive query gradient
-    _aggregate_query_gradient(pos_query_loader, "Computing positive query gradient")
+    # Aggregate positive query gradient (forget set)
+    _aggregate_query_gradient(pos_query_loader, "Computing forget query gradient")
 
     if state.use_distributed:
         synchronize_modules(model=model, tracked_module_names=tracked_module_names)
@@ -482,8 +482,8 @@ def compute_pairwise_dual_query_aggregated_scores_with_loaders(
                 pos_grads[module.name] = grad.clone()
             module.release_factor(AGGREGATED_GRADIENT_NAME)
 
-    # Aggregate negative query gradient
-    _aggregate_query_gradient(neg_query_loader, "Computing negative query gradient")
+    # Aggregate negative query gradient (retain set)
+    _aggregate_query_gradient(neg_query_loader, "Computing retain query gradient")
 
     if state.use_distributed:
         synchronize_modules(model=model, tracked_module_names=tracked_module_names)
