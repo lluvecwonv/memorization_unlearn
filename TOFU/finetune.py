@@ -87,7 +87,7 @@ def main(cfg):
             gradient_accumulation_steps=gradient_accumulation_steps,
             warmup_steps=max(1, max_steps//10),
             max_steps=max_steps,
-            learning_rate=cfg.lr,
+            lear0510ning_rate=cfg.lr,
             bf16=True,
             bf16_full_eval=True,
             logging_steps=max(1,max_steps//20),
