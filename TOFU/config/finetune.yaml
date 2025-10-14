@@ -1,4 +1,4 @@
-model_family: llama2-7b
+model_family: phi
 
 LoRA:
   r: 0
