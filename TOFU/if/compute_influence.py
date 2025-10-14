@@ -355,9 +355,9 @@ def main():
         scores_name=scores_name,
         score_args=score_args,
         factors_name=args.factors_name,
-        query_dataset=forget_dataset,           # Positive query: compute g_forget_avg
-        negative_query_dataset=retain_dataset,  # Negative query: compute g_retain_avg
-        train_dataset=forget_dataset,           # Target samples: compute influence score for each forget sample
+        forget_dataset=forget_dataset,       # Positive query: compute g_forget_avg
+        retain_dataset=retain_dataset,       # Negative query: compute g_retain_avg
+        train_dataset=forget_dataset,        # Target samples: compute influence score for each forget sample
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
         overwrite_output_dir=False,
