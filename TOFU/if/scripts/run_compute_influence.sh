@@ -34,7 +34,7 @@ echo "Working directory: $(pwd)"
 echo ""
 
 # Build command (compute_influence.py is in if/ subdirectory)
-cmd="python if/compute_influence.py \
+cmd="python if/compute_influence.py 아니 
     --model_name ${checkpoint_dir} \
     --model_family ${model_family} \
     --data_path ${data_path} \
