@@ -10,7 +10,7 @@ from torch.utils import data
 
 from kronfluence.arguments import FactorArguments
 from kronfluence.computer.factor_computer import FactorComputer
-from kronfluence.computer.score_computer import ScoreComputer
+from kronfluence.computer.compute_scores import ScoreComputer
 from kronfluence.module.utils import wrap_tracked_modules
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
