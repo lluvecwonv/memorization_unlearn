@@ -20,14 +20,17 @@ from kronfluence.utils.common.score_arguments import all_low_precision_score_arg
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 # Add parent TOFU directory to path for imports
+# IMPORTANT: TOFU_DIR must come BEFORE IF_DIR so that TOFU's utils.py is imported first
 TOFU_DIR = Path(__file__).parent.parent.resolve()
 IF_DIR = Path(__file__).parent.resolve()
-sys.path.insert(0, str(TOFU_DIR))
-sys.path.insert(0, str(IF_DIR))
+IF_UTILS_DIR = IF_DIR / "utils"
+
+sys.path.insert(0, str(TOFU_DIR))      # First: for data_module.py and TOFU's utils.py
+sys.path.insert(1, str(IF_UTILS_DIR))  # Second: for if/utils/task.py
 
 from data_module import TextDatasetQA
 from utils import get_model_identifiers_from_yaml
-from utils.task import LanguageModelingTask
+from task import LanguageModelingTask  # from if/utils/task.py
 
 
 def parse_args():
