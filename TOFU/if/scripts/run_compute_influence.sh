@@ -10,16 +10,16 @@ factors_name="ekfac_factors"         # Name of the factors directory
 factor_strategy="ekfac"              # Strategy used for factors
 
 # Dataset configuration
-data_path="locuslab/TOFU"  # HuggingFace dataset path or local path
-forget_split="forget10"     # Options: forget01, forget05, forget10
-retain_split="retain90"     # Options: retain99, retain95, retain90
+data_path="locuslab/TOFU"  
+forget_split="forget10"    
+retain_split="retain90"    
 max_length=512
 
 # Computation configuration
 query_batch_size=8
 train_batch_size=8
-use_half_precision="--use_half_precision"  # Remove or comment out to disable
-# use_compile="--use_compile"  # Uncomment to enable torch.compile
+use_half_precision="--use_half_precision"  
+
 
 # Output configuration
 save_dir="./influence_results"
@@ -34,7 +34,7 @@ echo "Working directory: $(pwd)"
 echo ""
 
 # Build command (compute_influence.py is in if/ subdirectory)
-cmd="python if/compute_influence.py 아니 
+cmd="python if/compute_influence.py 
     --model_name ${checkpoint_dir} \
     --model_family ${model_family} \
     --data_path ${data_path} \
