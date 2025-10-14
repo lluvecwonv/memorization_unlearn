@@ -348,7 +348,7 @@ def main():
     # Initialize analyzer
     logging.info("Initializing Analyzer")
     analyzer = Analyzer(
-        analysis_name="differential_if",
+        analysis_name="if_results",  # This will be added to output_dir path
         model=model,
         task=task,
         profile=args.profile,

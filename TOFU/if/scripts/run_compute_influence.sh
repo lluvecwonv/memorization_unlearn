@@ -6,7 +6,7 @@ checkpoint_dir="/root/tnpo/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-
 
 # Factor configuration
 factors_path="/root/tnpo/TOFU/kronfluence_factors"  # Path to where factors are stored
-factors_name="factors_ekfac_half"    # Name of the factors directory
+factors_name="ekfac_half"            # Name of the factors directory (Kronfluence adds 'factors_' prefix automatically)
 factor_strategy="ekfac"              # Strategy used for factors
 
 # Dataset configuration
