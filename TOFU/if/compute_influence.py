@@ -25,8 +25,11 @@ TOFU_DIR = Path(__file__).parent.parent.resolve()
 IF_DIR = Path(__file__).parent.resolve()
 IF_UTILS_DIR = IF_DIR / "utils"
 
-sys.path.insert(0, str(TOFU_DIR))      # First: for data_module.py and TOFU's utils.py
-sys.path.insert(1, str(IF_UTILS_DIR))  # Second: for if/utils/task.py
+# Add local Kronfluence to path (HIGHEST PRIORITY)
+KRONFLUENCE_DIR = TOFU_DIR.parent / "kronfluence" / "src"
+sys.path.insert(0, str(KRONFLUENCE_DIR))  # FIRST: local kronfluence
+sys.path.insert(1, str(TOFU_DIR))         # Second: for data_module.py and TOFU's utils.py
+sys.path.insert(2, str(IF_UTILS_DIR))     # Third: for if/utils/task.py
 
 from data_module import TextDatasetQA
 from task import LanguageModelingTask  # from if/utils/task.py
