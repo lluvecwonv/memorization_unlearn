@@ -14,11 +14,6 @@ from datetime import timedelta
 from accelerate import Accelerator, InitProcessGroupKwargs
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import ScoreArguments
-from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
-from kronfluence.utils.dataset import DataLoaderKwargs
-
 # Add parent TOFU directory to path for imports
 # IMPORTANT: TOFU_DIR must come BEFORE IF_DIR so that TOFU's utils.py is imported first
 TOFU_DIR = Path(__file__).parent.parent.resolve()
@@ -30,6 +25,19 @@ KRONFLUENCE_DIR = TOFU_DIR.parent / "kronfluence" / "src"
 sys.path.insert(0, str(KRONFLUENCE_DIR))  # FIRST: local kronfluence
 sys.path.insert(1, str(TOFU_DIR))         # Second: for data_module.py and TOFU's utils.py
 sys.path.insert(2, str(IF_UTILS_DIR))     # Third: for if/utils/task.py
+
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import ScoreArguments
+from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
+from kronfluence.utils.dataset import DataLoaderKwargs
+
+# Debug: Check which Kronfluence is being imported
+import kronfluence
+print("="*80)
+print(f"🔍 DEBUG: Kronfluence location: {kronfluence.__file__}")
+print(f"🔍 DEBUG: sys.path[0]: {sys.path[0]}")
+print(f"🔍 DEBUG: Expected path: {KRONFLUENCE_DIR}")
+print("="*80)
 
 from data_module import TextDatasetQA
 from task import LanguageModelingTask  # from if/utils/task.py
