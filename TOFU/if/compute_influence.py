@@ -351,6 +351,7 @@ def main():
     # Configure score arguments
     score_args, scores_name = configure_score_args(args)
 
+    # Compute pairwise scores
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,
