@@ -6,7 +6,7 @@ import random
 from scipy.stats import sem, hmean, ks_2samp
 
 def get_model_identifiers_from_yaml(model_family):
-    #path is model_configs.yaml
+    #path is model_config.yaml (in TOFU root, not in config/ subdirectory)
     '''
     models:
         llama2-7b:
@@ -17,7 +17,7 @@ def get_model_identifiers_from_yaml(model_family):
             start_of_sequence_token: "<s>"
     '''
     model_configs  = {}
-    with open("config/model_config.yaml", "r") as f:
+    with open("model_config.yaml", "r") as f:
         model_configs = yaml.load(f, Loader=yaml.FullLoader)
     return model_configs[model_family]
 

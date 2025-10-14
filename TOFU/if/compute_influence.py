@@ -185,7 +185,7 @@ def kronfluence_data_collator(batch):
 
 def load_model_config(model_family: str):
     """Load model configuration from yaml file with absolute path."""
-    config_path = TOFU_DIR / "config" / "model_config.yaml"
+    config_path = TOFU_DIR / "model_config.yaml"  # config is in TOFU root, not in subdirectory
 
     if not config_path.exists():
         raise FileNotFoundError(f"Model config not found at {config_path}")
