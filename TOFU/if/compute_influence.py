@@ -21,11 +21,13 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 
 # Add parent TOFU directory to path for imports
 TOFU_DIR = Path(__file__).parent.parent.resolve()
+IF_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(TOFU_DIR))
+sys.path.insert(0, str(IF_DIR))
 
 from data_module import TextDatasetQA
 from utils import get_model_identifiers_from_yaml
-from utils.tasks import LanguageModelingTask
+from utils.task import LanguageModelingTask
 
 
 def parse_args():
