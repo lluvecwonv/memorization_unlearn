@@ -25,12 +25,16 @@ use_half_precision="--use_half_precision"  # Remove or comment out to disable
 save_dir="./influence_results"
 save_id=""  # Optional ID to append to output names
 
-# Get script directory and navigate to parent
+# Navigate to TOFU root directory (two levels up from scripts/)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "${SCRIPT_DIR}/.."
+TOFU_ROOT="${SCRIPT_DIR}/../.."
+cd "${TOFU_ROOT}"
 
-# Build command
-cmd="python compute_influence.py \
+echo "Working directory: $(pwd)"
+echo ""
+
+# Build command (compute_influence.py is in if/ subdirectory)
+cmd="python if/compute_influence.py \
     --model_name ${checkpoint_dir} \
     --model_family ${model_family} \
     --data_path ${data_path} \
