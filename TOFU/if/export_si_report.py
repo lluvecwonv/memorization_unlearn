@@ -31,7 +31,7 @@ import torch
 # Matplotlib headless backend
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt₩
 
 
 def parse_args() -> argparse.Namespace:

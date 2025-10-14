@@ -145,5 +145,6 @@ def main(cfg):
 if __name__ == "__main__":
     main()
 
-#master_port=29500
-#CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node=1 --master_port=$master_port finetune.py --config-name=finetune.yaml split=full 
+# master_port=29500
+# CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node=1 --master_port=$master_port finetune.py --config-name=finetune.yaml split=full --model_family=phi
+ 
