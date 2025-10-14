@@ -2,7 +2,7 @@
 set -e
 
 # ========== Model and Data Configuration ==========
-MODEL_NAME="path/to/your/finetuned/model"  # TODO: 실제 모델 경로로 변경
+MODEL_NAME="/root/tnpo/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-05_llama2-7b_full_seed42_1/checkpoint-5000"
 MODEL_FAMILY="llama2-7b"  # "llama2-7b" or "pythia"
 DATA_PATH="locuslab/TOFU"
 SPLIT="full"  # "full", "forget10", "retain90", etc.

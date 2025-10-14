@@ -17,6 +17,7 @@ TOFU/gen_commands_*
 TOFU/json/
 TOFU/aggregated*
 TOFU/run.py
+TOFU/kronfluence_factors/
 
 muse/
 muse/baselines/ckpt
