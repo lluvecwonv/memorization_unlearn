@@ -5,7 +5,7 @@ model_family="llama2-7b"  # Options: llama2-7b, phi, stablelm, pythia-1.4, zephy
 checkpoint_dir="/root/tnpo/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-05_llama2-7b_full_seed42_1/checkpoint-5000"  # Path to the trained model checkpoint
 
 # Factor configuration
-factors_path="/root/tnpo/TOFU/kronfluence_factors/if_results"  # Path to where factors are stored
+factors_path="/root/tnpo/TOFU/kronfluence_factors"  # Path to where factors are stored
 factors_name="factors_ekfac_half"    # Name of the factors directory
 factor_strategy="ekfac"              # Strategy used for factors
 
