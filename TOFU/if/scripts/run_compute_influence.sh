@@ -25,6 +25,10 @@ use_half_precision="--use_half_precision"  # Remove or comment out to disable
 save_dir="./influence_results"
 save_id=""  # Optional ID to append to output names
 
+# Get script directory and navigate to parent
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "${SCRIPT_DIR}/.."
+
 # Build command
 cmd="python compute_influence.py \
     --model_name ${checkpoint_dir} \
