@@ -222,14 +222,14 @@ class ScoreComputer(Computer):
         self,
         scores_name: str,
         factors_name: str,
-        query_dataset: data.Dataset,
+        forget_dataset: data.Dataset,
         train_dataset: data.Dataset,
         per_device_query_batch_size: int,
-        negative_query_dataset: Optional[data.Dataset] = None,
+        retain_dataset: Optional[data.Dataset] = None,
         per_device_train_batch_size: Optional[int] = None,
         initial_per_device_train_batch_size_attempt: int = 4096,
-        query_indices: Optional[Sequence[int]] = None,
-        negative_query_indices: Optional[Sequence[int]] = None,
+        forget_indices: Optional[Sequence[int]] = None,
+        retain_indices: Optional[Sequence[int]] = None,
         train_indices: Optional[Sequence[int]] = None,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         score_args: Optional[ScoreArguments] = None,
@@ -244,27 +244,28 @@ class ScoreComputer(Computer):
                 The unique identifier for the score, used to organize and retrieve the results.
             factors_name (str):
                 The name of the factor to use for influence computations.
-            query_dataset (data.Dataset):
-                The query dataset, typically much smaller than the training dataset.
-            negative_query_dataset (data.Dataset, optional):
-                An optional second query dataset. If provided, its aggregated
-                gradients are subtracted from those of ``query_dataset`` before
-                computing pairwise scores.
+            forget_dataset (data.Dataset):
+                The forget dataset (positive query). Used to compute g_forget_avg.
+            retain_dataset (data.Dataset, optional):
+                The retain dataset (negative query). If provided, its aggregated
+                gradients are subtracted from those of ``forget_dataset`` before
+                computing pairwise scores. Used to compute g_retain_avg.
+                Formula: S_j = (g_forget_avg - g_retain_avg)^T * H^{-1} * g_train_j
             train_dataset (data.Dataset):
-                The training dataset.
+                The training dataset. Target samples for which influence scores will be computed.
             per_device_query_batch_size (int):
-                The per-device batch size used to compute query gradients.
+                The per-device batch size used to compute query gradients (forget/retain).
             per_device_train_batch_size (int, optional):
                 The per-device batch size used to compute training gradients. If not specified, an executable
                 batch size will be found.
             initial_per_device_train_batch_size_attempt (int, optional):
                 The initial attempted per-device batch size when the batch size is not provided.
-            query_indices (Sequence[int], optional):
-                The specific indices of the query dataset to compute the influence scores for. If not specified,
-                all query data points will be used.
-            negative_query_indices (Sequence[int], optional):
-                The specific indices of ``negative_query_dataset`` to compute the influence scores for. If not
-                specified, all data points from ``negative_query_dataset`` will be used.
+            forget_indices (Sequence[int], optional):
+                The specific indices of the forget dataset to compute the influence scores for. If not specified,
+                all forget data points will be used.
+            retain_indices (Sequence[int], optional):
+                The specific indices of the retain dataset to compute the influence scores for. If not
+                specified, all data points from retain dataset will be used.
             train_indices (Sequence[int], optional):
                 The specific indices of the training dataset to compute the influence scores for. If not
                 specified, all training data points will be used.
@@ -296,8 +297,8 @@ class ScoreComputer(Computer):
             overwrite_output_dir=overwrite_output_dir,
         )
 
-        if negative_query_dataset is not None and not score_args.aggregate_query_gradients:
-            self.logger.info("`negative_query_dataset` provided; setting `aggregate_query_gradients=True`.")
+        if retain_dataset is not None and not score_args.aggregate_query_gradients:
+            self.logger.info("`retain_dataset` provided; setting `aggregate_query_gradients=True`.")
             score_args.aggregate_query_gradients = True
 
         if score_args.compute_per_token_scores and score_args.aggregate_train_gradients:
@@ -327,17 +328,17 @@ class ScoreComputer(Computer):
         dataloader_params = self._configure_dataloader(dataloader_kwargs)
         if self.state.is_main_process:
             self._save_dataset_metadata(
-                dataset_name="query",
-                dataset=query_dataset,
-                indices=query_indices,
+                dataset_name="forget",
+                dataset=forget_dataset,
+                indices=forget_indices,
                 output_dir=scores_output_dir,
                 overwrite_output_dir=overwrite_output_dir,
             )
-            if negative_query_dataset is not None:
+            if retain_dataset is not None:
                 self._save_dataset_metadata(
-                    dataset_name="negative_query",
-                    dataset=negative_query_dataset,
-                    indices=negative_query_indices,
+                    dataset_name="retain",
+                    dataset=retain_dataset,
+                    indices=retain_indices,
                     output_dir=scores_output_dir,
                     overwrite_output_dir=overwrite_output_dir,
                 )
@@ -348,13 +349,13 @@ class ScoreComputer(Computer):
                 output_dir=scores_output_dir,
                 overwrite_output_dir=overwrite_output_dir,
             )
-        if query_indices is not None:
-            query_dataset = data.Subset(dataset=query_dataset, indices=query_indices)
-            del query_indices
+        if forget_indices is not None:
+            forget_dataset = data.Subset(dataset=forget_dataset, indices=forget_indices)
+            del forget_indices
 
-        if negative_query_dataset is not None and negative_query_indices is not None:
-            negative_query_dataset = data.Subset(dataset=negative_query_dataset, indices=negative_query_indices)
-            del negative_query_indices
+        if retain_dataset is not None and retain_indices is not None:
+            retain_dataset = data.Subset(dataset=retain_dataset, indices=retain_indices)
+            del retain_indices
 
         if train_indices is not None:
             train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
@@ -415,7 +416,7 @@ class ScoreComputer(Computer):
 
                 if per_device_train_batch_size is None:
                     per_device_train_batch_size = self._find_executable_pairwise_scores_batch_size(
-                        query_dataset=query_dataset,
+                        query_dataset=forget_dataset,
                         per_device_query_batch_size=per_device_query_batch_size
                         if not score_args.aggregate_query_gradients
                         else 1,
@@ -432,15 +433,15 @@ class ScoreComputer(Computer):
                 self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Compute Pairwise Score"):
-                    query_loader = self._get_dataloader(
-                        dataset=query_dataset,
+                    forget_loader = self._get_dataloader(
+                        dataset=forget_dataset,
                         per_device_batch_size=per_device_query_batch_size,
                         dataloader_params=dataloader_params,
                         allow_duplicates=not score_args.aggregate_query_gradients,
                     )
-                    if negative_query_dataset is not None:
-                        negative_query_loader = self._get_dataloader(
-                            dataset=negative_query_dataset,
+                    if retain_dataset is not None:
+                        retain_loader = self._get_dataloader(
+                            dataset=retain_dataset,
                             per_device_batch_size=per_device_query_batch_size,
                             dataloader_params=dataloader_params,
                             allow_duplicates=not score_args.aggregate_query_gradients,
@@ -453,15 +454,15 @@ class ScoreComputer(Computer):
                         allow_duplicates=not score_args.aggregate_train_gradients,
                         stack=not score_args.aggregate_train_gradients,
                     )
-                    if negative_query_dataset is not None:
+                    if retain_dataset is not None:
                         func = compute_pairwise_dual_query_aggregated_scores_with_loaders
                         scores = func(
                             model=self.model,
                             state=self.state,
                             task=self.task,
                             loaded_factors=loaded_factors,
-                            pos_query_loader=query_loader,
-                            neg_query_loader=negative_query_loader,
+                            pos_query_loader=forget_loader,
+                            neg_query_loader=retain_loader,
                             train_loader=train_loader,
                             score_args=score_args,
                             factor_args=factor_args,
@@ -480,7 +481,7 @@ class ScoreComputer(Computer):
                             state=self.state,
                             task=self.task,
                             loaded_factors=loaded_factors,
-                            query_loader=query_loader,
+                            query_loader=forget_loader,
                             train_loader=train_loader,
                             per_device_query_batch_size=per_device_query_batch_size,
                             score_args=score_args,
@@ -501,9 +502,9 @@ class ScoreComputer(Computer):
                             metadata=score_args.to_str_dict(),
                         )
                     self.state.wait_for_everyone()
-                if negative_query_dataset is not None:
-                    del negative_query_loader
-                del scores, query_loader, train_loader
+                if retain_dataset is not None:
+                    del retain_loader
+                del scores, forget_loader, train_loader
                 self._reset_memory()
                 self.logger.info(f"Saved pairwise scores at {scores_output_dir}.")
 
