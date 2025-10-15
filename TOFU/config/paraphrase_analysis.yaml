@@ -1,0 +1,26 @@
+# Paraphrase Analysis Configuration
+
+# Model settings
+model_family: llama2-7b
+full_model_path: null  # Use hf_key from model_config.yaml if null
+retain_model_path: null  # Use ft_model_path from model_config.yaml if null
+
+# Data settings
+data_path: ./TOFU_data
+split: forget10  # forget10, forget05, forget01, etc.
+
+# Analysis settings
+analysis:
+  batch_size: 1
+  max_samples: 10  # null for all samples
+  num_paraphrases: 5  # Number of paraphrases per question
+  output_dir: results
+
+# Model generation settings
+generation:
+  max_length: 512
+  max_new_tokens: 128
+
+# Device settings
+device: cuda  # cuda or cpu
+local_rank: 0  # For multi-GPU
