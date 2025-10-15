@@ -1,15 +1,8 @@
-import sys
 import os
 import torch
 import warnings
 import hydra
 from omegaconf import DictConfig
-
-
-script_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(script_dir)
-sys.path.insert(0, script_dir)
-sys.path.insert(0, parent_dir)
 
 from data_module import TextForgetDatasetQA
 from memorization.analysis.paraphrase_analyzer import DualModelAnalyzer
@@ -31,8 +24,9 @@ def generate_paraphrases_for_questions(questions, generator, num_paraphrases, mo
         List of paraphrase lists, one per question
     """
     all_paraphrases = []
+    failed_count = 0
 
-    for question in questions:
+    for idx, question in enumerate(questions):
         # Try beam search paraphrases first
         paraphrases = generator.generate_beam_paraphrases(question, model, tokenizer)
 
@@ -41,15 +35,22 @@ def generate_paraphrases_for_questions(questions, generator, num_paraphrases, mo
             paraphrases = generator.generate_prompt_paraphrases(question, model, tokenizer)
 
         # Extract just the text from paraphrase dicts
-        paraphrase_texts = [p['text'] for p in paraphrases] if paraphrases else [question]
+        paraphrase_texts = [p['text'] for p in paraphrases] if paraphrases else []
 
-        # Pad or trim to match num_paraphrases
-        if len(paraphrase_texts) < num_paraphrases:
-            paraphrase_texts.extend([question] * (num_paraphrases - len(paraphrase_texts)))
-        else:
+        # Skip if paraphrase generation failed
+        if not paraphrase_texts:
+            warnings.warn(f"Failed to generate paraphrases for question {idx}: {question[:50]}...")
+            failed_count += 1
+            continue
+
+        # Trim to match num_paraphrases if we have more
+        if len(paraphrase_texts) > num_paraphrases:
             paraphrase_texts = paraphrase_texts[:num_paraphrases]
 
         all_paraphrases.append(paraphrase_texts)
+
+    if failed_count > 0:
+        print(f"Warning: Failed to generate paraphrases for {failed_count}/{len(questions)} questions")
 
     return all_paraphrases
 

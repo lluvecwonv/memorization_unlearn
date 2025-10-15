@@ -146,4 +146,4 @@ if __name__ == "__main__":
     main()
 
 # master_port=29500
-# CUDA_VISIBLE_DEVICES=0 torchrun --nproc_per_node=1 --master_port=$master_port finetune.py --config-name=finetune.yaml split=full
+# CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 --master_port=$master_port finetune.py --config-name=finetune.yaml split=retain90

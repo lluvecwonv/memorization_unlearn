@@ -6,7 +6,7 @@ full_model_path: null  # Use hf_key from model_config.yaml if null
 retain_model_path: null  # Use ft_model_path from model_config.yaml if null
 
 # Data settings
-data_path: ./TOFU_data
+data_path: locuslab/TOFU
 split: forget10  # forget10, forget05, forget01, etc.
 
 # Analysis settings
@@ -18,8 +18,8 @@ analysis:
 
 # Model generation settings
 generation:
-  max_length: 512
-  max_new_tokens: 128
+  max_length: 256
+  max_new_tokens: 256
 
 # Device settings
 device: cuda  # cuda or cpu
