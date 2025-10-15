@@ -279,6 +279,53 @@ def save_analysis_results(results: Dict[str, Any], output_dir: str, tag: str) ->
     return json_path
 
 
+def save_results_for_notebook(original_results: List[Dict[str, Any]],
+                               paraphrase_results: List[Dict[str, Any]],
+                               output_dir: str,
+                               data_path: str,
+                               split: str) -> str:
+    """Save results in notebook-compatible format
+
+    Args:
+        original_results: Results from original questions
+        paraphrase_results: Results from paraphrased questions
+        output_dir: Directory to save results
+        data_path: Dataset path
+        split: Dataset split name
+
+    Returns:
+        Path to saved JSON file
+    """
+    formatted_results = []
+
+    for i, orig in enumerate(original_results):
+        formatted_results.append({
+            "Question": orig.get('question', ''),
+            "OriginalMemorization": orig.get('memorization_score', 0.0),
+            "OriginalSimplicity": orig.get('simplicity_score', 0.0)
+        })
+
+    output_data = {
+        "dataset": data_path,
+        "split": split,
+        "num_questions": len(formatted_results),
+        "results": formatted_results
+    }
+
+    # Save with dataset name in filename
+    dataset_name = data_path.replace('/', '_')
+    filename = f"paraphrase_{dataset_name}_{split}_results.json"
+
+    os.makedirs(output_dir, exist_ok=True)
+    json_path = os.path.join(output_dir, filename)
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"Notebook-compatible results saved to {json_path}")
+    return json_path
+
+
 def combine_dual_model_results(
     original_results: List[Dict[str, Any]],
     paraphrase_results: List[Dict[str, Any]],

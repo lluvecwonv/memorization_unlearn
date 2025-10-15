@@ -36,27 +36,31 @@ class DualModelAnalyzer:
         full_model.eval()
         retain_model.eval()
 
+        # Custom collate function for TextForgetDatasetQA
+        def collate_fn(samples):
+            forget_batch = [sample[0] for sample in samples]  # Extract forget data
+
+            input_ids = torch.stack([item[0] for item in forget_batch])
+            labels = torch.stack([item[1] for item in forget_batch])
+            attention_mask = torch.stack([item[2] for item in forget_batch])
+
+            return input_ids, labels, attention_mask
+
         # Create dataloader
         from torch.utils.data import DataLoader
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
+        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False, collate_fn=collate_fn)
 
         all_results = []
 
         with torch.inference_mode():
             for batch_idx, batch in enumerate(tqdm(dataloader, desc=f"Analyzing ({tag})")):
-                # Handle different batch formats
-                if isinstance(batch, dict):
-                    input_ids = batch['input_ids'].to(full_model.device)
-                    attention_mask = batch['attention_mask'].to(full_model.device)
-                    labels = batch.get('labels', input_ids).to(full_model.device)
-                elif isinstance(batch, (list, tuple)) and len(batch) >= 3:
-                    input_ids, labels, attention_mask = batch[0], batch[1], batch[2]
-                    input_ids = input_ids.to(full_model.device)
-                    attention_mask = attention_mask.to(full_model.device)
-                    labels = labels.to(full_model.device)
-                else:
-                    logger.error(f"Unexpected batch format: {type(batch)}")
-                    continue
+                # Unpack batch from collate_fn
+                input_ids, labels, attention_mask = batch
+
+                # Move to device
+                input_ids = input_ids.to(full_model.device)
+                labels = labels.to(full_model.device)
+                attention_mask = attention_mask.to(full_model.device)
 
                 batch_dict = {
                     'input_ids': input_ids,
@@ -131,10 +135,16 @@ class DualModelAnalyzer:
         with torch.no_grad():
             # Calculate per-token accuracy for full model (IN condition)
             full_model.eval()
-            acc_in_scores = compute_per_token_accuracy(batch_dict, full_model, tokenizer)
+            # Move batch to full_model's device
+            batch_full = {k: v.to(full_model.device) if isinstance(v, torch.Tensor) else v
+                         for k, v in batch_dict.items()}
+            acc_in_scores = compute_per_token_accuracy(batch_full, full_model, tokenizer)
 
             # Calculate per-token accuracy for retain model (OUT condition)
             retain_model.eval()
-            acc_out_scores = compute_per_token_accuracy(batch_dict, retain_model, tokenizer)
+            # Move batch to retain_model's device
+            batch_retain = {k: v.to(retain_model.device) if isinstance(v, torch.Tensor) else v
+                           for k, v in batch_dict.items()}
+            acc_out_scores = compute_per_token_accuracy(batch_retain, retain_model, tokenizer)
 
         return acc_in_scores, acc_out_scores

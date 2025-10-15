@@ -295,12 +295,11 @@ def run_generation(cfg, batch, model, tokenizer):
     
     #now generate
     torch.manual_seed(0)
-    out = model.generate(inputs.input_ids, 
+    out = model.generate(inputs.input_ids,
                         attention_mask=inputs.attention_mask,
-                        max_length=cfg.generation.max_length, 
-                        max_new_tokens=cfg.generation.max_new_tokens, 
+                        max_new_tokens=cfg.generation.max_new_tokens,
                         do_sample=True,
-                        use_cache=True, 
+                        use_cache=True,
                         pad_token_id=left_pad_tokenizer.eos_token_id)
     
     strs = left_pad_tokenizer.batch_decode(out[:, inputs.input_ids.shape[-1]:], skip_special_tokens=True)

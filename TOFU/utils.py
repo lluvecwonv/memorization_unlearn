@@ -3,6 +3,7 @@ import copy
 import numpy as np
 import torch
 import random
+import os
 from scipy.stats import sem, hmean, ks_2samp
 
 def get_model_identifiers_from_yaml(model_family):
@@ -16,8 +17,12 @@ def get_model_identifiers_from_yaml(model_family):
             answer_tag: ""
             start_of_sequence_token: "<s>"
     '''
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "config", "model_config.yaml")
+
     model_configs  = {}
-    with open("config/model_config.yaml", "r") as f:
+    with open(config_path, "r") as f:
         model_configs = yaml.load(f, Loader=yaml.FullLoader)
     return model_configs[model_family]
 
