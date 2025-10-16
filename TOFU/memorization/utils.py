@@ -19,79 +19,108 @@ logger = logging.getLogger(__name__)
 
 
 def create_paraphrased_dataset(original_dataset, paraphrases_list, tokenizer, model_family):
-    """Create dataset from paraphrased questions"""
+    """Create dataset from paraphrased questions
+
+    Returns dataset compatible with TextForgetDatasetQA format:
+    Each item returns [forget_data, retain_data] where each is (input_ids, labels, attention_mask)
+    """
     from torch.utils.data import Dataset
+    from data_module import convert_raw_data_to_model_format
 
     class ParaphraseDataset(Dataset):
         def __init__(self, original_dataset, paraphrases_list, tokenizer, model_family):
-            self.data = []
+            self.original_dataset = original_dataset
+            self.paraphrases_list = paraphrases_list
+            self.tokenizer = tokenizer
+            self.model_family = model_family
+            self.model_configs = get_model_identifiers_from_yaml(model_family)
 
-            # Flatten paraphrases
-            for i, paraphrases in enumerate(paraphrases_list):
-                original_item = original_dataset[i]
-                for para in paraphrases:
-                    self.data.append({
-                        'question': para,
-                        'answer': original_item['answer'],
-                        'original_idx': i
-                    })
+            # Get max_length from original dataset
+            self.max_length = getattr(original_dataset, 'max_length', 256)
 
         def __len__(self):
-            return len(self.data)
+            # Total number of paraphrases across all questions
+            return sum(len(paraphrases) for paraphrases in self.paraphrases_list)
 
         def __getitem__(self, idx):
-            return self.data[idx]
+            # Find which question this paraphrase belongs to
+            cumulative = 0
+            question_idx = 0
+            for i, paraphrases in enumerate(self.paraphrases_list):
+                if idx < cumulative + len(paraphrases):
+                    question_idx = i
+                    paraphrase_idx = idx - cumulative
+                    break
+                cumulative += len(paraphrases)
+
+            # Get original answer from forget_data
+            forget_data_orig = self.original_dataset.forget_data[question_idx]
+            retain_data_orig = self.original_dataset.retain_data[question_idx]
+            answer = forget_data_orig['answer']
+
+            # Get paraphrased question
+            paraphrased_question = self.paraphrases_list[question_idx][paraphrase_idx]
+
+            # Convert paraphrased question with original answer (forget)
+            forget_converted = convert_raw_data_to_model_format(
+                self.tokenizer,
+                self.max_length,
+                paraphrased_question,
+                answer,
+                self.model_configs
+            )
+
+            # Use original retain data
+            retain_converted = convert_raw_data_to_model_format(
+                self.tokenizer,
+                self.max_length,
+                retain_data_orig['question'],
+                retain_data_orig['answer'],
+                self.model_configs
+            )
+
+            # Return same format as TextForgetDatasetQA
+            return [forget_converted, retain_converted]
 
     return ParaphraseDataset(original_dataset, paraphrases_list, tokenizer, model_family)
 
-
 def compute_per_token_accuracy(batch: dict, model: AutoModelForCausalLM, tokenizer: AutoTokenizer) -> List[float]:
-    """토큰별 정확도 계산 - 간단 버전"""
+    """토큰별 정확도 계산 (next-token shift 반영)
+
+    - logits[:, t]는 토큰 t+1을 예측하므로, labels는 1칸 오른쪽으로 시프트하여 비교한다.
+    - labels == -100인 위치는 무시한다.
+    """
 
     with torch.no_grad():
         model.eval()
         outputs = model(**batch, return_dict=True)
-        logits = outputs.logits
+        logits = outputs.logits  # [B, T, V]
 
-        # 예측값과 정답값 추출
-        predictions = torch.argmax(logits, dim=-1)
-        labels = batch["labels"]
+        labels = batch["labels"]  # [B, T]
 
-        # 배치별 정확도 계산
+        # next-token prediction 기준으로 시프트
+        shifted_logits = logits[:, :-1, :].contiguous()  # 예측 t -> 실제 t+1
+        shifted_labels = labels[:, 1:].contiguous()
+
+        # 예측값 (argmax)
+        predictions = torch.argmax(shifted_logits, dim=-1)  # [B, T-1]
+
+        # 배치별 정확도 계산 (labels != -100 위치만)
         accuracies = []
         for i in range(predictions.size(0)):
-            # 유효한 토큰만 선택 (labels != -100)
-            valid_mask = labels[i] != -100
-            if valid_mask.sum() == 0:
+            valid_mask = shifted_labels[i] != -100
+            if not torch.any(valid_mask):
+                # 평가 가능한 토큰이 없으면 0.0으로 반환하되 경고 로그 남김
+                logger.warning("No valid tokens to evaluate for a sample (all labels == -100). Returning 0.0 accuracy.")
                 accuracies.append(0.0)
                 continue
 
-            # 정확도 계산
             pred_tokens = predictions[i][valid_mask]
-            true_tokens = labels[i][valid_mask]
+            true_tokens = shifted_labels[i][valid_mask]
             accuracy = (pred_tokens == true_tokens).float().mean().item()
             accuracies.append(accuracy)
 
     return accuracies
-
-
-def calculate_counterfactual_scores(batch_dict: dict, full_model: AutoModelForCausalLM,
-                                    retain_model: AutoModelForCausalLM, tokenizer: AutoTokenizer):
-    """
-    Calculate counterfactual memorization scores using per-token accuracy
-
-    Returns:
-        acc_in_scores: Accuracy when example is in training set (full model)
-        acc_out_scores: Accuracy when example is excluded (retain model)
-    """
-    with torch.no_grad():
-        full_model.eval()
-        acc_in_scores = compute_per_token_accuracy(batch_dict, full_model, tokenizer)
-
-        retain_model.eval()
-        acc_out_scores = compute_per_token_accuracy(batch_dict, retain_model, tokenizer)
-
-    return acc_in_scores, acc_out_scores
 
 
 def load_models_and_tokenizer(model_family, full_model_path=None, retain_model_path=None):
@@ -116,30 +145,6 @@ def load_models_and_tokenizer(model_family, full_model_path=None, retain_model_p
     retain_model = AutoModelForCausalLM.from_pretrained(retain_model_path)
 
     return full_model, retain_model, tokenizer
-
-
-def calculate_counterfactual_memorization(acc_in_scores, acc_out_scores):
-    """
-    Calculate counterfactual memorization and simplicity metrics
-
-    Based on Feldman (2020):
-    - mem(x) = M(A(S ∪ {x}), x) - M(A(S), x)
-    - simplicity(x) = min(M(A(S ∪ {x}), x), M(A(S), x))
-
-    Returns:
-        memorization_scores: Counterfactual memorization scores
-        simplicity_scores: Generalization/simplicity scores
-    """
-    acc_in_array = np.array(acc_in_scores)
-    acc_out_array = np.array(acc_out_scores)
-
-    # Counterfactual memorization: mem(x) = Acc_IN - Acc_OUT
-    memorization_scores = acc_in_array - acc_out_array
-
-    # Simplicity score: min(Acc_IN, Acc_OUT)
-    simplicity_scores = np.minimum(acc_in_array, acc_out_array)
-
-    return memorization_scores.tolist(), simplicity_scores.tolist()
 
 
 def get_output_dir(config) -> str:
@@ -300,9 +305,15 @@ def save_results_for_notebook(original_results: List[Dict[str, Any]],
 
     for i, orig in enumerate(original_results):
         formatted_results.append({
-            "Question": orig.get('question', ''),
-            "OriginalMemorization": orig.get('memorization_score', 0.0),
-            "OriginalSimplicity": orig.get('simplicity_score', 0.0)
+            "question": orig.get('question', ''),
+            "generated_answer": orig.get('generated_answer', ''),
+            "ground_truth": orig.get('ground_truth', ''),
+            "acc_in_score": orig.get('acc_in_score', 0.0),
+            "acc_out_score": orig.get('acc_out_score', 0.0),
+            "memorization_score": orig.get('memorization_score', 0.0),
+            "simplicity_score": orig.get('simplicity_score', 0.0),
+            "batch_idx": orig.get('batch_idx', i),
+            "example_idx": orig.get('example_idx', 0)
         })
 
     output_data = {

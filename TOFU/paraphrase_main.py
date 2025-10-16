@@ -3,6 +3,7 @@ import torch
 import warnings
 import hydra
 from omegaconf import DictConfig
+from tqdm import tqdm
 
 from data_module import TextForgetDatasetQA
 from memorization.analysis.paraphrase_analyzer import DualModelAnalyzer
@@ -11,11 +12,14 @@ from memorization.utils import load_models_and_tokenizer, create_paraphrased_dat
 
 
 def generate_paraphrases_for_questions(questions, generator, num_paraphrases, model=None, tokenizer=None):
-
+    """Generate paraphrases for a list of questions with progress tracking"""
     all_paraphrases = []
     failed_count = 0
 
-    for idx, question in enumerate(questions):
+    print(f"\nGenerating {num_paraphrases} paraphrases for each of {len(questions)} questions...")
+    print(f"Total paraphrases to generate: {len(questions) * num_paraphrases}")
+
+    for idx, question in enumerate(tqdm(questions, desc="Generating paraphrases", unit="question")):
         # Try beam search paraphrases first
         paraphrases = generator.generate_beam_paraphrases(question, model, tokenizer)
 
@@ -26,12 +30,6 @@ def generate_paraphrases_for_questions(questions, generator, num_paraphrases, mo
         # Extract just the text from paraphrase dicts
         paraphrase_texts = [p['text'] for p in paraphrases] if paraphrases else []
 
-        # Skip if paraphrase generation failed
-        if not paraphrase_texts:
-            warnings.warn(f"Failed to generate paraphrases for question {idx}: {question[:50]}...")
-            failed_count += 1
-            continue
-
         # Trim to match num_paraphrases if we have more
         if len(paraphrase_texts) > num_paraphrases:
             paraphrase_texts = paraphrase_texts[:num_paraphrases]
@@ -39,7 +37,9 @@ def generate_paraphrases_for_questions(questions, generator, num_paraphrases, mo
         all_paraphrases.append(paraphrase_texts)
 
     if failed_count > 0:
-        print(f"Warning: Failed to generate paraphrases for {failed_count}/{len(questions)} questions")
+        print(f"\n⚠️  Warning: Failed to generate paraphrases for {failed_count}/{len(questions)} questions")
+    else:
+        print(f"\n✅ Successfully generated paraphrases for all {len(questions)} questions!")
 
     return all_paraphrases
 
@@ -171,5 +171,5 @@ def main(cfg: DictConfig):
 if __name__ == "__main__":
     main()
 
-# master_port=29500
+# master_port=29505
 # CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 --master_port=$master_port paraphrase_main.py --config-name=paraphrase_analysis

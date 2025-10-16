@@ -75,7 +75,7 @@ class DualModelAnalyzer:
 
                 # Calculate memorization and simplicity
                 memorization_scores = [acc_in - acc_out for acc_in, acc_out in zip(acc_in_scores, acc_out_scores)]
-                simplicity_scores = [min(acc_in, acc_out) for acc_in, acc_out in zip(acc_in_scores, acc_out_scores)]
+                simplicity_scores = [acc_in + acc_out for acc_in, acc_out in zip(acc_in_scores, acc_out_scores)]
 
                 # Generate text for inspection
                 input_texts, output_texts, ground_truths = run_generation(

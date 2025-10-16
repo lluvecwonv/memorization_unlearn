@@ -2,8 +2,8 @@
 
 # Model settings
 model_family: llama2-7b
-full_model_path: /root/memorization_unlearn/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-05_llama2-7b_full_seed42_1/checkpoint-625  # Use hf_key from model_config.yaml if null
-retain_model_path: /root/memorization_unlearn/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-05_phi_retain90_seed42_1/checkpoint-2250
+full_model_path: /root/memorization_unlearn/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-05_llama2-7b_full_seed42_1/checkpoint-625
+retain_model_path: /root/memorization_unlearn/TOFU/paper_models/final_ft_noLORA_5_epochs_inst_lr1e-05_llama2-7b_retain90_seed42_1/checkpoint-2250
 
 # Data settings
 data_path: locuslab/TOFU
