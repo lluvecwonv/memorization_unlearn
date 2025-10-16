@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 def create_paraphrased_dataset(original_dataset, paraphrases_list, tokenizer, model_family):
     """Create dataset from paraphrased questions
 
-    Returns dataset compatible with TextForgetDatasetQA format:
-    Each item returns [forget_data, retain_data] where each is (input_ids, labels, attention_mask)
+    Returns dataset compatible with TextDatasetQA format:
+    Each item returns (input_ids, labels, attention_mask)
     """
     from torch.utils.data import Dataset
     from data_module import convert_raw_data_to_model_format
@@ -53,16 +53,15 @@ def create_paraphrased_dataset(original_dataset, paraphrases_list, tokenizer, mo
                     break
                 cumulative += len(paraphrases)
 
-            # Get original answer from forget_data
-            forget_data_orig = self.original_dataset.forget_data[question_idx]
-            retain_data_orig = self.original_dataset.retain_data[question_idx]
-            answer = forget_data_orig['answer']
+            # Get original data (TextDatasetQA uses .data attribute)
+            original_data = self.original_dataset.data[question_idx]
+            answer = original_data['answer']
 
             # Get paraphrased question
             paraphrased_question = self.paraphrases_list[question_idx][paraphrase_idx]
 
-            # Convert paraphrased question with original answer (forget)
-            forget_converted = convert_raw_data_to_model_format(
+            # Convert paraphrased question with original answer
+            converted = convert_raw_data_to_model_format(
                 self.tokenizer,
                 self.max_length,
                 paraphrased_question,
@@ -70,17 +69,8 @@ def create_paraphrased_dataset(original_dataset, paraphrases_list, tokenizer, mo
                 self.model_configs
             )
 
-            # Use original retain data
-            retain_converted = convert_raw_data_to_model_format(
-                self.tokenizer,
-                self.max_length,
-                retain_data_orig['question'],
-                retain_data_orig['answer'],
-                self.model_configs
-            )
-
-            # Return same format as TextForgetDatasetQA
-            return [forget_converted, retain_converted]
+            # Return same format as TextDatasetQA: (input_ids, labels, attention_mask)
+            return converted
 
     return ParaphraseDataset(original_dataset, paraphrases_list, tokenizer, model_family)
 
@@ -383,3 +373,112 @@ def combine_dual_model_results(
     logger.info(f"📊 Memorization difference (paraphrase - original): {combined_results['summary']['memorization_difference']:.4f}")
 
     return combined_results
+
+
+def save_paraphrase_results(
+    original_results: List[Dict[str, Any]],
+    paraphrase_results: List[Dict[str, Any]],
+    all_paraphrases: List[List[str]],
+    output_dir: str,
+    data_path: str,
+    split: str,
+    num_paraphrases: int
+) -> str:
+    """Save paraphrase results with original-paraphrase grouping
+
+    This format groups each original question with all its paraphrases and computes
+    comparison metrics (memorization_difference, simplicity_difference, etc.)
+
+    Args:
+        original_results: Results from analyzing original questions
+        paraphrase_results: Results from analyzing paraphrased questions (flattened list)
+        all_paraphrases: List of paraphrase lists (one per original question)
+        output_dir: Directory to save results
+        data_path: Dataset path
+        split: Dataset split name
+        num_paraphrases: Number of paraphrases per question
+
+    Returns:
+        Path to saved JSON file
+    """
+    logger.info("Creating paraphrase results with original-paraphrase grouping...")
+
+    formatted_results = []
+    para_idx = 0  # Index into flattened paraphrase_results
+
+    for orig_idx, orig in enumerate(original_results):
+        # Get paraphrases for this original question
+        question_paraphrases = all_paraphrases[orig_idx] if orig_idx < len(all_paraphrases) else []
+        num_generated = len(question_paraphrases)
+
+        # Collect paraphrase results for this original question
+        paraphrase_details = []
+        for p_idx in range(num_generated):
+            if para_idx < len(paraphrase_results):
+                para = paraphrase_results[para_idx]
+
+                # Compute differences
+                mem_diff = para['memorization_score'] - orig['memorization_score']
+                simp_diff = para['simplicity_score'] - orig['simplicity_score']
+
+                paraphrase_detail = {
+                    "strategy": "counterfactual_paraphrase",
+                    "index": p_idx,
+                    "original_question": orig['question'],
+                    "paraphrased_question": para['question'],
+                    "generated_answer": para['generated_answer'],
+                    "original_response": orig['generated_answer'],
+                    "paraphrase_response": para['generated_answer'],
+                    "original_acc_in": orig['acc_in_score'],
+                    "original_acc_out": orig['acc_out_score'],
+                    "original_memorization": orig['memorization_score'],
+                    "original_simplicity": orig['simplicity_score'],
+                    "paraphrase_acc_in": para['acc_in_score'],
+                    "paraphrase_acc_out": para['acc_out_score'],
+                    "paraphrase_memorization": para['memorization_score'],
+                    "paraphrase_simplicity": para['simplicity_score'],
+                    "memorization_difference": mem_diff,
+                    "simplicity_difference": simp_diff
+                }
+                paraphrase_details.append(paraphrase_detail)
+                para_idx += 1
+
+        # Create entry for this original question
+        question_result = {
+            "Question": orig['question'],
+            "GroundTruth": orig['ground_truth'],
+            "Predicted": orig['generated_answer'],
+            "OriginalMemorization": orig['memorization_score'],
+            "OriginalSimplicity": orig['simplicity_score'],
+            "ParaphraseResults": paraphrase_details,
+            "NumParaphrasesGenerated": num_generated,
+            "GeneratedParaphrases": [
+                {
+                    "original_question": orig['question'],
+                    "paraphrased_question": question_paraphrases[i],
+                    "answer": paraphrase_details[i]['generated_answer'] if i < len(paraphrase_details) else ""
+                }
+                for i in range(num_generated)
+            ]
+        }
+        formatted_results.append(question_result)
+
+    # Create output structure
+    output_data = {
+        "results": formatted_results
+    }
+
+    # Create filename
+    dataset_name = data_path.replace('/', '_')
+    filename = f"paraphrase_{dataset_name}_{split}_results.json"
+
+    os.makedirs(output_dir, exist_ok=True)
+    json_path = os.path.join(output_dir, filename)
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"✅ Paraphrase results saved to {json_path}")
+    logger.info(f"📊 Saved {len(formatted_results)} original questions with their paraphrases")
+
+    return json_path

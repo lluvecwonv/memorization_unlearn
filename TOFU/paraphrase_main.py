@@ -4,11 +4,14 @@ import warnings
 import hydra
 from omegaconf import DictConfig
 from tqdm import tqdm
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-from data_module import TextForgetDatasetQA
+from data_module import TextDatasetQA
 from memorization.analysis.paraphrase_analyzer import DualModelAnalyzer
 from memorization.analysis.paraphrase_generator import ParaphraseGenerator
-from memorization.utils import load_models_and_tokenizer, create_paraphrased_dataset, save_results_for_notebook
+from memorization.analysis.paraphrase_visualizer import ParaphraseVisualizer
+from memorization.utils import create_paraphrased_dataset, save_paraphrase_results
+from utils import get_model_identifiers_from_yaml
 
 
 def generate_paraphrases_for_questions(questions, generator, num_paraphrases, model=None, tokenizer=None):
@@ -64,35 +67,45 @@ def main(cfg: DictConfig):
 
     os.makedirs(cfg.analysis.output_dir, exist_ok=True)
 
-    # Load models and tokenizer
-    full_model, retain_model, tokenizer = load_models_and_tokenizer(
-        cfg.model_family,
-        full_model_path=cfg.get('full_model_path'),
-        retain_model_path=cfg.get('retain_model_path')
-    )
+    # Get model config and load tokenizer
+    model_cfg = get_model_identifiers_from_yaml(cfg.model_family)
+    model_id = model_cfg["hf_key"]
 
-    # Place models on different GPUs to avoid OOM
-    print("Loading full_model to GPU 0...")
+    print(f"Loading tokenizer from: {model_id}")
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer.pad_token = tokenizer.eos_token
+
+    # Load full model (trained on all data)
+    print(f"Loading full model from: {cfg.full_model_path}")
+    full_model = AutoModelForCausalLM.from_pretrained(cfg.full_model_path)
+    print("Moving full_model to GPU 0...")
     full_model = full_model.to(device_full)
-    print("Loading retain_model to GPU 1...")
+
+    # Load retain model (trained without forget set)
+    print(f"Loading retain model from: {cfg.retain_model_path}")
+    retain_model = AutoModelForCausalLM.from_pretrained(cfg.retain_model_path)
+    print("Moving retain_model to GPU 1...")
     retain_model = retain_model.to(device_retain)
 
-    # Load dataset
-    dataset = TextForgetDatasetQA(
+    # Load dataset (use TextDatasetQA for original answers, not idk answers)
+    dataset = TextDatasetQA(
         data_path=cfg.data_path,
         tokenizer=tokenizer,
         model_family=cfg.model_family,
         max_length=cfg.generation.max_length,
-        split=cfg.split
+        split=cfg.split,
+        question_key='question',
+        answer_key='answer'
     )
 
-    # Create analyzer and generator
+    # Create analyzer, generator, and visualizer
     analyzer = DualModelAnalyzer(
         batch_size=cfg.analysis.batch_size,
         output_dir=cfg.analysis.output_dir,
         model_config=cfg
     )
     generator = ParaphraseGenerator(cfg)
+    visualizer = ParaphraseVisualizer(output_dir=cfg.analysis.output_dir)
 
     # STEP 1: Analyze original dataset
     print("\n" + "="*60)
@@ -147,24 +160,30 @@ def main(cfg: DictConfig):
     print("\n" + "="*60)
     print("STEP 4: Saving paraphrase results...")
     print("="*60)
-    save_results_for_notebook(
+
+    # Save paraphrase results with original-paraphrase grouping
+    paraphrase_path = save_paraphrase_results(
         original_results=orig_results,
         paraphrase_results=para_results,
+        all_paraphrases=all_paraphrases,
         output_dir=cfg.analysis.output_dir,
         data_path=cfg.data_path,
-        split=cfg.split
+        split=cfg.split,
+        num_paraphrases=cfg.analysis.num_paraphrases
     )
+    print(f"✅ Paraphrase results saved to: {paraphrase_path}")
 
-    # Also save combined results for internal use
-    combined_results = analyzer.combine_and_save_results(
-        original_results=orig_results,
-        paraphrase_results=para_results,
-        tag="combined"
-    )
+    # STEP 5: Create visualizations
+    print("\n" + "="*60)
+    print("STEP 5: Creating visualizations...")
+    print("="*60)
+
+    # Create all standard visualizations using visualizer
+    visualizer.create_all_visualizations(orig_results, para_results)
 
     print("\n" + "="*60)
     print("Analysis complete!")
-    print(f"Results saved to: {cfg.analysis.output_dir}")
+    print(f"Results saved to: {paraphrase_path}")
     print("="*60)
 
 
